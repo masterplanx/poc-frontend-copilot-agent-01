@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 const SESSION_KEY = 'frontend-session'
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? '/api' : 'http://localhost:8001')
 const DEMO_CREDENTIALS = {
   username: 'admin',
   password: 'admin123',
