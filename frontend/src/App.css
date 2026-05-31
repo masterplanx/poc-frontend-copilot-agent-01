@@ -255,6 +255,15 @@
   margin-top: 24px;
 }
 
+.refresh-message {
+  margin-top: 16px;
+  color: var(--ink);
+}
+
+.action-group {
+  margin-top: 16px;
+}
+
 .session-meta {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -7,9 +7,10 @@ Este repositorio contiene una aplicación web en React creada en la carpeta `fro
 - Página de login en `/login`
 - Página de bienvenida en `/welcome`
 - Autenticación contra el backend externo `poc-backend-copilot-agent-01`
-- Guardado del `access_token` en `sessionStorage`
+- Guardado del `access_token` y `refresh_token` en `sessionStorage`
 - Redirección automática al login si no existe una sesión válida
 - Cierre de sesión para limpiar el token y bloquear nuevamente la ruta protegida
+- Botón para refrescar manualmente el token y mostrar su nueva expiración
 
 ## Backend esperado
 
@@ -19,10 +20,11 @@ La aplicación consume por defecto el backend en:
 http://localhost:8000
 ```
 
-Endpoint utilizado:
+Endpoints utilizados:
 
 ```txt
 POST /token
+POST /refresh
 ```
 
 Body esperado:
@@ -31,6 +33,14 @@ Body esperado:
 {
   "username": "admin",
   "password": "admin123"
+}
+```
+
+Para refrescar el token:
+
+```json
+{
+  "refresh_token": "<jwt>"
 }
 ```
 
@@ -94,4 +104,6 @@ npm run build
    - contraseña: `admin123`
 3. Al autenticarse correctamente se guarda el token en la sesión del navegador.
 4. La aplicación redirige a `/welcome`.
-5. Si intentas entrar a `/welcome` sin sesión, volverás automáticamente a `/login`.
+5. En `/welcome`, usa **Refrescar token** para renovar manualmente la sesión.
+6. La interfaz muestra un mensaje con la nueva fecha y hora de expiración del token.
+7. Si intentas entrar a `/welcome` sin sesión, volverás automáticamente a `/login`.
