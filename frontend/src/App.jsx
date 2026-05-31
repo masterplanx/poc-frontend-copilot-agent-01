@@ -27,13 +27,16 @@ function normalizeUsername(username) {
   return String(username ?? '').trim().replace(/[<>]/g, '').slice(0, 64)
 }
 
-function writeSession(payload, username) {
+function writeSession(payload, username, currentSession = null) {
+  const expiresAt = new Date(Date.now() + Number(payload.expires_in ?? 0) * 1000).toISOString()
   const session = {
     token: payload.access_token,
+    refreshToken: payload.refresh_token ?? currentSession?.refreshToken ?? '',
     tokenType: payload.token_type,
     expiresIn: payload.expires_in,
     username: normalizeUsername(username),
     createdAt: new Date().toISOString(),
+    expiresAt,
   }
 
   sessionStorage.setItem(SESSION_KEY, JSON.stringify(session))
@@ -60,12 +63,41 @@ function getPreviewToken(token) {
   return `${token.slice(0, 12)}…${token.slice(-8)}`
 }
 
+function getSessionExpiration(session) {
+  if (!session) {
+    return null
+  }
+
+  if (session.expiresAt) {
+    const parsed = new Date(session.expiresAt)
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed
+    }
+  }
+
+  const createdAt = new Date(session.createdAt ?? '')
+  if (Number.isNaN(createdAt.getTime())) {
+    return null
+  }
+
+  return new Date(createdAt.getTime() + Number(session.expiresIn ?? 0) * 1000)
+}
+
+function formatDateTime(value) {
+  return value.toLocaleString('es-CL', {
+    dateStyle: 'medium',
+    timeStyle: 'medium',
+  })
+}
+
 function App() {
   const [path, setPath] = useState(getInitialPath)
   const [session, setSession] = useState(readSession)
   const [formData, setFormData] = useState(DEMO_CREDENTIALS)
   const [errorMessage, setErrorMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [refreshMessage, setRefreshMessage] = useState('')
 
   useEffect(() => {
     const handlePopState = () => {
@@ -101,6 +133,7 @@ function App() {
 
     return `Bienvenido, ${session.username}. Tu sesión está activa en este navegador.`
   }, [session])
+  const expirationDate = useMemo(() => getSessionExpiration(session), [session])
 
   function navigateTo(nextPath, replace = false) {
     const currentPath = window.location.pathname || '/'
@@ -122,6 +155,7 @@ function App() {
   async function handleSubmit(event) {
     event.preventDefault()
     setErrorMessage('')
+    setRefreshMessage('')
     setIsSubmitting(true)
 
     try {
@@ -160,7 +194,51 @@ function App() {
     setSession(null)
     setFormData(DEMO_CREDENTIALS)
     setErrorMessage('')
+    setRefreshMessage('')
     navigateTo('/login', true)
+  }
+
+  async function handleRefreshToken() {
+    if (!session?.refreshToken) {
+      setRefreshMessage('No hay refresh token disponible para renovar la sesión.')
+      return
+    }
+
+    setRefreshMessage('')
+    setIsRefreshing(true)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          refresh_token: session.refreshToken,
+        }),
+      })
+
+      const payload = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        setRefreshMessage(payload?.detail ?? 'No fue posible refrescar el token.')
+        return
+      }
+
+      const nextSession = writeSession(payload, session.username, session)
+      setSession(nextSession)
+      const nextExpiration = getSessionExpiration(nextSession)
+      const expirationLabel = nextExpiration
+        ? formatDateTime(nextExpiration)
+        : 'sin fecha disponible'
+      setRefreshMessage(`Token refrescado correctamente. Expira el ${expirationLabel}.`)
+    } catch {
+      setRefreshMessage(
+        'No se pudo conectar con el backend para refrescar el token. Verifica la API.',
+      )
+    } finally {
+      setIsRefreshing(false)
+    }
   }
 
   return (
@@ -191,8 +269,8 @@ function App() {
           <span className="eyebrow">Portal autenticado</span>
           <h1>Accede con el backend y entra solo si tu sesión es válida.</h1>
           <p>
-            Esta interfaz React consume <code>POST /token</code>, guarda el access token en
-            <code> sessionStorage </code> y protege la página de bienvenida.
+            Esta interfaz React consume <code>POST /token</code> y <code>POST /refresh</code>,
+            guarda los tokens en <code> sessionStorage </code> y protege la página de bienvenida.
           </p>
         </section>
 
@@ -218,6 +296,11 @@ function App() {
                 </div>
               </dl>
 
+              <p className="helper-copy">
+                Expiración estimada:{' '}
+                <strong>{expirationDate ? formatDateTime(expirationDate) : 'No disponible'}</strong>
+              </p>
+
               <div className="token-card">
                 <span className="token-label">Token en sesión</span>
                 <strong>{getPreviewToken(session.token)}</strong>
@@ -231,6 +314,21 @@ function App() {
                 <li>La sesión vive solo mientras dura la pestaña o ventana del navegador.</li>
                 <li>El cierre de sesión limpia el token y bloquea el acceso protegido.</li>
               </ul>
+              {refreshMessage ? (
+                <p className="refresh-message" role="status">
+                  {refreshMessage}
+                </p>
+              ) : null}
+              <div className="action-group">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={handleRefreshToken}
+                  disabled={isRefreshing}
+                >
+                  {isRefreshing ? 'Refrescando token...' : 'Refrescar token'}
+                </button>
+              </div>
               <button type="button" className="primary-button" onClick={handleLogout}>
                 Salir de la sesión
               </button>
