@@ -23,12 +23,16 @@ function readSession() {
   }
 }
 
-function writeSession(payload) {
+function normalizeUsername(username) {
+  return String(username ?? '').trim().replace(/[<>]/g, '').slice(0, 64)
+}
+
+function writeSession(payload, username) {
   const session = {
     token: payload.access_token,
     tokenType: payload.token_type,
     expiresIn: payload.expires_in,
-    username: DEMO_CREDENTIALS.username,
+    username: normalizeUsername(username),
     createdAt: new Date().toISOString(),
   }
 
@@ -139,7 +143,7 @@ function App() {
         return
       }
 
-      const nextSession = writeSession(payload)
+      const nextSession = writeSession(payload, formData.username)
       setSession(nextSession)
       navigateTo('/welcome')
     } catch {
